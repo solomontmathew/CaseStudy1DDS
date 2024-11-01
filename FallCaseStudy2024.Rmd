@@ -1,0 +1,200 @@
+---
+title: "FallCaseStudy2024Code"
+author: "Solomon Mathew"
+date: "2024-10-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+Executive Summary: Frito Lay is interested in identifying the top 3 features contributing to attrition and even predicting attrition based on a set of features. DDSAnalytics will employee Naive Bayes model to predict the attrition based on the dataset provided by Frito Lay. Employee attrition is an important subject to tackle as companies allocate massive amount of resources to recruit and pay employees. The top 3 factors DDSAnalytics identified that contributed to attrition were Overtime, Marital Status, and Job Involvement. The Naive Bayes model performed decently well with a mean accuracy of 79%, a mean sensitivity of 83% and a mean specificity of 61% over 500 iterations. 
+
+Introduction: Employee attrition is a major factor that talent management at Fortune 500 must deal with this. It is an especially problematic issue as company resources are invested to recruiting and paying the employee rather investing it right back into the company for potential profit elsewhere. By making the employee stick, Frito Lay can guarantee that their resource allocation is profitable. DDSAnalytics seeks to identify highly correlated features so that Frito Lay may commune and decide to invest resources -maybe holding more Employee culture-related events to engage more employees improving JobInvolvement, highly correlated feature with attrition.
+
+Youtube Link: https://www.youtube.com/watch?v=7xITpKntG3o
+
+```{r cars}
+library(dplyr)
+library(plotly)
+library(ggplot2)
+library(e1071)
+library(caret)
+library(fastDummies)
+messy = read.csv(file.choose(), header=TRUE)
+messycorr=read.csv(file.choose(), header=TRUE)
+validation = read.csv(file.choose(), header=TRUE)
+head(messy)
+colSums(is.na(messy))
+sum(is.na(messy))
+str(messy)
+summary(messy$MonthlyIncome)
+sd(messy$MonthlyIncome)
+summary(messy$MonthlyRate)
+sd(messy$MonthlyRate)
+hist(messy$MonthlyIncome)
+hist(messy$MonthlyRate)
+ggplot(data = messy, aes(x = MonthlyRate, y =MonthlyIncome)) +
+  geom_point(color="green") +
+  geom_smooth(color="gold") +
+  theme_classic()
+messy$MonthlyIncome = log(messy$MonthlyIncome + 1)
+
+messycorr$Department <- as.numeric(as.factor(messycorr$Department))
+messycorr$JobRole <- as.numeric(as.factor(messycorr$JobRole))
+messycorr$EducationField <- as.numeric(as.factor(messycorr$EducationField))
+messycorr$BusinessTravel <- as.numeric(as.factor(messycorr$BusinessTravel))
+messycorr$Gender <- as.numeric(as.factor(messycorr$Gender))
+messycorr$MaritalStatus <- as.numeric(as.factor(messycorr$MaritalStatus))
+messycorr$OverTime <- as.numeric(as.factor(messycorr$OverTime))
+messycorr$Attrition <- as.numeric(as.factor(messycorr$Attrition))
+
+#drop columns that have only one unique val and ID column
+lapply(messy, unique)
+messy <- messy %>% select(-c(ID, Over18, StandardHours, EmployeeCount, EmployeeNumber))
+messycorr <- messycorr %>% select(-c(ID, Over18, StandardHours, EmployeeCount, EmployeeNumber))
+
+cor(messycorr) ###CORRELATION MATRIX
+
+
+#MonthlyIncome and JobLevel have a correlation of 0.9516 which violates Naive Bayes Independence 
+#Drop Joblevel as MonthlyIncome should represent Joblevel values while providing more information
+#messy <- messy %>% select(-c(JobLevel))
+
+###GRAPHICAL EDA###
+OverTimepercentified <- messy %>% group_by(OverTime, Attrition) %>% summarise(count = n()) %>% mutate(percent = count / sum(count) * 100)
+
+e <- OverTimepercentified %>% ggplot(aes(x = OverTime, y = percent, fill = as.factor(Attrition))) + geom_bar(stat = "identity", position = 'dodge') +
+                            ggtitle('Attrition vs ') + xlab('OverTime') + ylab('Percent Attrition') + scale_fill_manual(values = c("Yes" = "blue", "No" = "red"), name = "Attrition") + 
+  theme(
+    legend.title = element_text(size = 14),  
+    legend.text = element_text(size = 12)    
+  )
+ggplotly(e)
+
+Maritalpercentified <- messy %>% group_by(MaritalStatus, Attrition) %>% summarise(count = n()) %>% mutate(percent = count / sum(count) * 100)
+
+p <- Maritalpercentified %>% ggplot(aes(x = MaritalStatus, y = percent, fill = as.factor(Attrition))) + geom_bar(stat = "identity", position = 'dodge') +
+  ggtitle('Attrition vs Marital Status') + xlab('Marital Status') + ylab('Percent Attrition') + scale_fill_manual(values = c("Yes" = "blue", "No" = "red"), name = "Attrition") + 
+  theme(
+    legend.title = element_text(size = 14),  
+    legend.text = element_text(size = 12)    
+  )
+ggplotly(p)
+
+Involvementpercentified <- messy %>% group_by(JobInvolvement, Attrition) %>% summarise(count = n()) %>% mutate(percent = count / sum(count) * 100)
+
+
+i <- Involvementpercentified %>% ggplot(aes(x = JobInvolvement, y = percent, fill = as.factor(Attrition))) + geom_bar(stat = "identity", position = 'dodge') +
+  ggtitle('Attrition vs Job Involvement') + xlab('Job Involvement') + ylab('Percent Attrition') + scale_fill_manual(values = c("Yes" = "blue", "No" = "red"), name = "Attrition") + 
+  theme(
+    legend.title = element_text(size = 14),  
+    legend.text = element_text(size = 12)    
+  )
+ggplotly(i)
+
+  
+
+ggplot(messy, aes(x = Age, y = MonthlyIncome, color = as.factor(Attrition))) + 
+  geom_point() +
+  ggtitle('Age vs Monthly Income colored by Attrition')
+
+messy$Attrition <- as.factor(messy$Attrition)
+messy$BusinessTravel <- as.factor(messy$BusinessTravel)
+messy$Department <- as.factor(messy$Department)
+messy$Gender <- as.factor(messy$Gender)
+messy$JobRole <- as.factor(messy$JobRole)
+messy$MaritalStatus <- as.factor(messy$MaritalStatus)
+messy$OverTime <- as.factor(messy$OverTime)
+messy$EducationField <- as.factor(messy$EducationField)
+table(messy$Attrition)
+
+#NAiveBayes with log(MonthlyIncome) without threshold adjustment
+splitPerc = .7
+iterations = 500
+all_masterAcc = matrix(nrow = iterations)
+all_master_sensitivity = matrix(nrow = iterations)
+all_master_specificity = matrix(nrow = iterations)
+all_f1Score = matrix(nrow = iterations)
+for(j in 1:iterations){
+  trainIndices = sample(1:dim(messy)[1],round(splitPerc * dim(messy)[1]))
+  train = messy[trainIndices,]
+  test = messy[-trainIndices,]
+  naive_model = naiveBayes(train[,c(1,3:31)],train$Attrition, laplace = 1)
+  table(predict(naive_model, test[,c(1,3:31)]), test$Attrition)
+  CM = confusionMatrix(table(predict(naive_model, test[,c(1,3:31)]), test$Attrition))
+  all_masterAcc[j] = CM$overall[1]
+  all_master_sensitivity[j] = CM$byClass['Sensitivity']
+  all_master_specificity[j] = CM$byClass['Specificity']
+  all_f1Score[j] = CM$byClass['F1']
+}
+
+all_MeanAcc = colMeans(all_masterAcc)
+all_MeanSens = colMeans(all_master_sensitivity)
+all_MeanSpec = colMeans(all_master_specificity)
+all_MeanF1 = colMeans(all_f1Score)
+
+
+all_MeanAcc
+all_MeanSens
+all_MeanSpec
+all_MeanF1
+
+
+#NaiveBayes Threshold Adjusted
+splitPerc = .7
+iterations = 500
+all_masterAcc = matrix(nrow = iterations)
+all_master_sensitivity = matrix(nrow = iterations)
+all_master_specificity = matrix(nrow = iterations)
+all_f1Score = matrix(nrow = iterations)
+for(j in 1:iterations){
+  trainIndices = sample(1:dim(messy)[1],round(splitPerc * dim(messy)[1]))
+  train = messy[trainIndices,]
+  test = messy[-trainIndices,]
+  naive_model = naiveBayes(train[,c(1,3:31)],train$Attrition)
+  prob = predict(naive_model, test[,c(1,3:31)], type = "raw")
+  predict = ifelse(prob[, 2] > 0.4, "Yes", "No")
+  CM = confusionMatrix(as.factor(predict), test$Attrition)
+  #table(predict(all_model, test[,c(1,3:31)]), test$Attrition)
+  #CM = confusionMatrix(table(predict(all_model, test[,c(1,3:31)]), test$Attrition))
+  all_masterAcc[j] = CM$overall[1]
+  all_master_sensitivity[j] = CM$byClass['Sensitivity']
+  all_master_specificity[j] = CM$byClass['Specificity']
+  all_f1Score[j] = CM$byClass['F1']
+}
+
+all_MeanAcc = colMeans(all_masterAcc)
+all_MeanSens = colMeans(all_master_sensitivity)
+all_MeanSpec = colMeans(all_master_specificity)
+all_MeanF1 = colMeans(all_f1Score)
+
+
+all_MeanAcc
+all_MeanSens
+all_MeanSpec
+all_MeanF1
+
+
+##VALIDATION##
+
+validation$MonthlyIncome = log(validation$MonthlyIncome + 1)
+
+validation_drop <- validation %>% select(-c(EmployeeNumber, ID, EmployeeCount, Over18, StandardHours))
+validation_drop$BusinessTravel <- as.factor(validation_drop$BusinessTravel)
+validation_drop$Department <- as.factor(validation_drop$Department)
+validation_drop$Gender <- as.factor(validation_drop$Gender)
+validation_drop$JobRole <- as.factor(validation_drop$JobRole)
+validation_drop$MaritalStatus <- as.factor(validation_drop$MaritalStatus)
+validation_drop$OverTime <- as.factor(validation_drop$OverTime)
+validation_drop$EducationField <- as.factor(validation_drop$EducationField)
+
+#validate = predict(naive_model, validation_drop[, c(1:30)])
+#validate_df <- data.frame(Attrition = validate)
+#validation_final_results <- cbind(ID = validation$ID, validate_df)
+#write.csv(validation_final_results, "validation_naive.csv", row.names = FALSE)
+```
+
+
